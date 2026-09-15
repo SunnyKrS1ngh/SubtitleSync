@@ -1,0 +1,10 @@
+faster-whisper>=1.2.0
+imageio-ffmpeg>=0.6.0
+# GPU runtime libs (needed for --device cuda / auto on machines with NVIDIA GPUs)
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+nvidia-cuda-runtime-cu12
+srt>=3.5.0
+soundfile>=0.14.0
+numpy>=2.0
+pytest>=8.0
