@@ -66,10 +66,10 @@ missing.
 python sync.py list-tracks movie.mkv
 
 # detect the offset and write a corrected .srt
-python sync.py movie.mkv subtitles.srt
+python sync.py sync movie.mkv subtitles.srt
 
 # force a specific audio track (ordinal from list-tracks)
-python sync.py movie.mkv subtitles.srt --track 1
+python sync.py sync movie.mkv subtitles.srt --track 1
 
 # speed / accuracy knobs
 python sync.py movie.mkv subtitles.srt --model tiny   # faster, less accurate
