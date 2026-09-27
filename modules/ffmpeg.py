@@ -8,7 +8,7 @@ import imageio_ffmpeg
 
 _DURATION_RE = re.compile(r"Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)")
 _AUDIO_STREAM_RE = re.compile(
-    r"^\s*Stream #0:(\d+)(?:\(([^)]*)\))?\s*:\s*Audio:", re.IGNORECASE
+    r"^\s*Stream #0:(\d+)(?:\[[^\]]*\])?(?:\(([^)]*)\))?\s*:\s*Audio:", re.IGNORECASE
 )
 
 

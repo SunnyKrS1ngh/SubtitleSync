@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SubtitleSync</title>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">SS</span>
+    <div>
+      <h1>SubtitleSync</h1>
+      <p class="tagline">Fix subtitles that are out of time with the video</p>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span id="deviceBadge" class="badge" title="Where the work is running">checking&hellip;</span>
+    <button id="quitBtn" class="btn btn-quiet" type="button">Quit</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- GPU offer -->
+  <section id="gpuBanner" class="card gpu-banner hidden">
+    <div class="gpu-text">
+      <h2>Speed up with your graphics card</h2>
+      <p id="gpuBlurb">An NVIDIA graphics card was found. Enabling it makes the check
+         much faster, but downloads about 2 GB the first time.</p>
+    </div>
+    <div class="gpu-actions">
+      <button id="gpuEnableBtn" class="btn btn-primary" type="button">Enable GPU</button>
+      <button id="gpuDismissBtn" class="btn btn-quiet" type="button">Not now</button>
+    </div>
+    <div id="gpuLog" class="gpu-log hidden"></div>
+  </section>
+
+  <!-- Step 1: choose files -->
+  <section class="card">
+    <h2><span class="step">1</span> Choose your files</h2>
+    <p class="hint">Your video never leaves this computer. Nothing is uploaded anywhere.</p>
+
+    <div class="field">
+      <label for="videoPath">Video file</label>
+      <div class="row">
+        <input id="videoPath" type="text" spellcheck="false"
+               placeholder="D:\Movies\example.mkv">
+        <button class="btn btn-browse" data-kind="video" type="button">Browse&hellip;</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="srtPath">Subtitle file</label>
+      <div class="row">
+        <input id="srtPath" type="text" spellcheck="false"
+               placeholder="D:\Movies\example.srt">
+        <button class="btn btn-browse" data-kind="subtitle" type="button">Browse&hellip;</button>
+      </div>
+      <p class="note" id="cueNote"></p>
+    </div>
+
+    <details class="advanced">
+      <summary>Advanced options</summary>
+      <div class="grid-2">
+        <div class="field">
+          <label for="modelSel">Speech model</label>
+          <select id="modelSel">
+            <option value="base" selected>Balanced (recommended)</option>
+            <option value="tiny">Fastest, less accurate</option>
+            <option value="small">More accurate, slower</option>
+            <option value="medium">Most accurate, slowest</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="trackSel">Audio track</label>
+          <select id="trackSel">
+            <option value="">Choose automatically</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="samplesInput">Samples to check</label>
+          <input id="samplesInput" type="number" min="3" max="40" value="15">
+          <p class="note">More samples is more thorough but slower.</p>
+        </div>
+        <div class="field">
+          <label for="paddingInput">Search range (seconds)</label>
+          <input id="paddingInput" type="number" min="2" max="60" value="15">
+          <p class="note">Must be at least as large as the delay you expect.</p>
+        </div>
+      </div>
+    </details>
+
+    <div class="actions">
+      <button id="runBtn" class="btn btn-primary btn-lg" type="button" disabled>
+        Find the desync
+      </button>
+      <span id="readyHint" class="ready-hint">Choose a video and a subtitle file to begin.</span>
+    </div>
+  </section>
+
+  <!-- Step 2: progress -->
+  <section id="progressCard" class="card hidden">
+    <h2><span class="step">2</span> Checking&hellip;</h2>
+    <div class="progress-wrap">
+      <div class="progress-track"><div id="progressBar" class="progress-bar"></div></div>
+      <div class="progress-meta">
+        <span id="progressMsg">Starting&hellip;</span>
+        <span id="progressPct">0%</span>
+      </div>
+    </div>
+    <p class="hint">This listens to a few short clips and compares them to the subtitle text.
+       Nothing is transcribed in full.</p>
+    <table class="samples">
+      <thead><tr><th>#</th><th>Subtitle at</th><th>Difference</th><th>Match</th><th>Heard</th></tr></thead>
+      <tbody id="sampleRows"></tbody>
+    </table>
+  </section>
+
+  <!-- Step 3: result -->
+  <section id="resultCard" class="card hidden">
+    <h2><span class="step done">&#10003;</span> Result</h2>
+
+    <div id="verdict" class="verdict">
+      <div class="verdict-offset" id="verdictOffset">&mdash;</div>
+      <p class="verdict-text" id="verdictText"></p>
+    </div>
+
+    <div id="lowConfidence" class="notice notice-warn hidden">
+      <strong>Low confidence.</strong>
+      <span id="lowConfidenceText"></span>
+      You can still save the file, but check it first.
+    </div>
+
+    <dl class="stats">
+      <div><dt>Confidence</dt><dd id="statConf">&mdash;</dd></div>
+      <div><dt>Consistency</dt><dd id="statMad">&mdash;</dd></div>
+      <div><dt>Audio track</dt><dd id="statTrack">&mdash;</dd></div>
+      <div><dt>Running on</dt><dd id="statDevice">&mdash;</dd></div>
+      <div><dt>Took</dt><dd id="statElapsed">&mdash;</dd></div>
+    </dl>
+
+    <div class="save-block">
+      <h3>Saved file</h3>
+      <p id="savedPath" class="saved-path">&mdash;</p>
+      <div class="row">
+        <input id="destPath" type="text" spellcheck="false" placeholder="Choose where to save">
+        <button id="destBrowseBtn" class="btn btn-browse" type="button">Browse&hellip;</button>
+        <button id="saveBtn" class="btn btn-primary" type="button">Save as&hellip;</button>
+      </div>
+      <p id="saveNote" class="note"></p>
+    </div>
+
+    <details class="advanced">
+      <summary>Technical details</summary>
+      <pre id="techDetails" class="tech"></pre>
+    </details>
+  </section>
+
+  <section id="errorCard" class="card notice notice-error hidden">
+    <h2>Something went wrong</h2>
+    <p id="errorText"></p>
+    <p class="hint">Common causes: the subtitle file belongs to a different episode, or the
+       video has several audio tracks and the wrong one was used. Try a different audio
+       track under Advanced options.</p>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <span>SubtitleSync runs entirely on this computer.</span>
+</footer>
+
+<!-- file picker -->
+<div id="pickerBackdrop" class="backdrop hidden">
+  <div class="picker">
+    <div class="picker-head">
+      <h3 id="pickerTitle">Choose a file</h3>
+      <button id="pickerClose" class="btn btn-quiet" type="button">Close</button>
+    </div>
+    <div class="picker-path">
+      <button id="pickerUp" class="btn btn-quiet" type="button" title="Up one folder">&uarr;</button>
+      <span id="pickerPathText">&mdash;</span>
+      <button id="pickerSelectFolderTopBtn" class="btn btn-primary btn-sm picker-folder-btn hidden" type="button">Select this folder</button>
+    </div>
+    <div id="pickerDrives" class="picker-drives"></div>
+    <div id="pickerList" class="picker-list"></div>
+    <div class="picker-foot">
+      <div id="pickerDestBar" class="picker-dest-bar hidden">
+        <div class="picker-dest-input-wrap">
+          <label for="pickerDestFileName">File name:</label>
+          <input id="pickerDestFileName" type="text" spellcheck="false" placeholder="subtitles.corrected.srt">
+        </div>
+        <button id="pickerSelectFolderBtn" class="btn btn-primary" type="button">Select this folder</button>
+      </div>
+      <span id="pickerEmpty" class="note"></span>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
