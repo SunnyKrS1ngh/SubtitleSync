@@ -109,6 +109,16 @@ def _is_cuda_lib_missing(exc: TranscribeError) -> bool:
     return "cublas" in msg or "cudnn" in msg or "not found or cannot be loaded" in msg
 
 
+def probe_device() -> str:
+    """Return "cuda" if a usable NVIDIA GPU is present, else "cpu".
+
+    Registers any installed NVIDIA runtime libraries first so detection works
+    for wheels that ship CUDA outside the system PATH.
+    """
+    _register_nvidia_dlls()
+    return _pick_device("base")
+
+
 def _pick_device(model_size: str) -> str:
     try:
         import ctranslate2

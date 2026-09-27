@@ -1,10 +1,11 @@
 faster-whisper>=1.2.0
 imageio-ffmpeg>=0.6.0
-# GPU runtime libs (needed for --device cuda / auto on machines with NVIDIA GPUs)
-nvidia-cublas-cu12
-nvidia-cudnn-cu12
-nvidia-cuda-runtime-cu12
 srt>=3.5.0
 soundfile>=0.14.0
 numpy>=2.0
 pytest>=8.0
+
+# NVIDIA GPU acceleration is NOT installed by default because the CUDA runtime
+# wheels are roughly 2 GB. The app offers to install them on demand if it
+# detects an NVIDIA card. To include them up front instead:
+#     pip install -r requirements-gpu.txt

@@ -2,20 +2,11 @@ from __future__ import annotations
 
 import argparse
 import sys
-import time
 from pathlib import Path
 
-from modules.corrected_srt import default_output_path, shift_entries, write_srt
-from modules.ffmpeg import FfmpegError, probe, select_track, ordered_tracks
-from modules.srt_parser import parse_srt_file
-from modules.syncer import SyncOptions, SyncResult, run_sync
-from modules.transcribe import WhisperSession
-
-
-def _fmt_offset(seconds: float) -> str:
-    sign = "+" if seconds >= 0 else ""
-    m, s = divmod(abs(seconds), 60)
-    return f"{sign}{seconds:.2f}s (delay subtitles by {seconds:.2f}s)" if seconds >= 0 else f"{seconds:.2f}s (advance subtitles by {abs(seconds):.2f}s)"
+from modules.ffmpeg import FfmpegError, probe, ordered_tracks
+from modules.pipeline import SubtitleSyncError, format_offset, run_task
+from modules.syncer import SyncOptions
 
 
 def cmd_list_tracks(video: str) -> None:
@@ -45,23 +36,6 @@ def cmd_list_tracks(video: str) -> None:
 
 
 def cmd_sync(args: argparse.Namespace) -> None:
-    video = args.video
-    srt = args.subtitle
-
-    if not Path(video).is_file():
-        print(f"error: video file not found: {video}", file=sys.stderr)
-        sys.exit(1)
-    if not Path(srt).is_file():
-        print(f"error: subtitle file not found: {srt}", file=sys.stderr)
-        sys.exit(1)
-
-    print("parsing subtitles ...")
-    entries = parse_srt_file(srt)
-    if not entries:
-        print("error: no subtitle entries parsed", file=sys.stderr)
-        sys.exit(1)
-    print(f"  {len(entries)} subtitle entries loaded")
-
     options = SyncOptions(
         model=args.model,
         device=args.device,
@@ -72,49 +46,40 @@ def cmd_sync(args: argparse.Namespace) -> None:
         min_accepted=args.min_accepted,
     )
 
-    print("loading whisper model ...")
-    t0 = time.time()
-    session = WhisperSession(options.model, options.device, options.language)
-    print(f"  model '{options.model}' loaded in {time.time()-t0:.1f}s on {session.device}")
+    def on_progress(message: str, fraction: float) -> None:
+        sys.stderr.write(f"\r  {fraction * 100:5.1f}%  {message:<52}")
+        sys.stderr.flush()
 
-    print("analyzing audio tracks ...")
+    auto_save = not args.no_corrected
     try:
-        tracks, duration = probe(video)
-    except FfmpegError as e:
-        print(f"error: {e}", file=sys.stderr)
+        result = run_task(
+            args.video,
+            args.subtitle,
+            options,
+            progress=on_progress,
+            auto_save=auto_save,
+            output_path=args.output,
+        )
+    except SubtitleSyncError as exc:
+        sys.stderr.write("\r" + " " * 70 + "\r")
+        print(f"error: {exc}", file=sys.stderr)
         sys.exit(1)
-
-    best = select_track(tracks, args.track)
-    print(f"  selected track: ordinal={best.ordinal} lang={best.language or '(none)'} "
-          f"{'(default)' if best.is_default else ''}")
-    if args.track is None and len(tracks) > 1:
-        print(f"  (auto-selected; use --track <0..{len(tracks)-1}> to override)")
-
-    print(f"sampling up to {options.n_samples} subtitle segments ...")
-    t0 = time.time()
-    result = run_sync(video, entries, options, session)
-    elapsed = time.time() - t0
-    print(f"  done in {elapsed:.1f}s")
+    sys.stderr.write("\r" + " " * 70 + "\r")
 
     print(f"\n{'='*60}")
-    if result.offset is None:
-        print("no matching subtitle lines found - wrong subtitle file or wrong audio track?")
-        print(f"tried track: ordinal={result.track.ordinal} lang={result.track.language or '(none)'}")
-        print("try --list-tracks to see all audio tracks, then --track <ordinal> to try another.")
-        sys.exit(1)
-
-    print(f"detected offset: {_fmt_offset(result.offset)}")
+    print(f"detected offset: {format_offset(result.offset)}")
     print(f"confidence:     {result.accepted_count}/{result.sample_count} samples matched "
           f"(median absolute deviation: {result.mad:.2f}s)")
-    print(f"track used:      ordinal={result.track.ordinal} lang={result.track.language or '(none)'}")
+    print(f"track used:      ordinal={result.track_ordinal} "
+          f"lang={result.track_language or '(none)'}")
+    print(f"device:          {result.device}")
     print(f"duration:        {int(result.duration//3600)}h {int((result.duration%3600)//60)}m "
           f"{result.duration%60:.1f}s")
     print(f"{'='*60}")
 
-    fraction = result.accepted_count / max(1, result.sample_count)
-    if fraction < options.min_accepted:
-        print(f"\nWARNING: low match rate ({fraction*100:.0f}% < "
-              f"{options.min_accepted*100:.0f}%). The detected offset is likely unreliable.")
+    if result.low_confidence:
+        print(f"\nWARNING: low match rate ({result.accepted_count}/{result.sample_count}). "
+              f"The detected offset is likely unreliable.")
         print("This usually means the wrong audio track, a different subtitle release,")
         print("or the subtitles match a different episode.")
         print("Check available tracks with `sync.py list-tracks <video>`, then retry with")
@@ -123,23 +88,16 @@ def cmd_sync(args: argparse.Namespace) -> None:
 
     if args.verbose:
         print("\nsample details:")
-        for r in result.per_sample:
-            tag = "OK" if r.accepted else "  "
+        for s in result.per_sample:
+            tag = "OK" if s["accepted"] else "  "
             print(
-                f"  [{tag}] sub#{r.subtitle_index:4d} @ {r.subtitle_start:8.2f}s | "
-                f"offset={r.offset:+8.3f}s | sim={r.similarity:.2f} | "
-                f"transcribed: {r.transcribed[:60]}"
+                f"  [{tag}] sub#{s['index']:4d} @ {s['start']:8.2f}s | "
+                f"offset={s['offset']:+8.3f}s | sim={s['similarity']:.2f} | "
+                f"transcribed: {s['transcribed'][:60]}"
             )
 
-    if not args.no_corrected and args.output is None:
-        out_path = default_output_path(srt)
-    else:
-        out_path = args.output
-
-    if not args.no_corrected and out_path:
-        shifted = shift_entries(entries, result.offset)
-        write_srt(shifted, out_path)
-        print(f"\ncorrected subtitle saved to: {out_path}")
+    if result.output_path:
+        print(f"\ncorrected subtitle saved to: {result.output_path}")
 
 
 def main() -> None:

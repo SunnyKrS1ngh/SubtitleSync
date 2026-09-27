@@ -1,27 +1,47 @@
 # -- Python --
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 .pytest_cache/
 build/
 dist/
 
 # -- Virtual environments --
+.venv/
 venv/
+env/
+env_sub/
+ENV/
+env.bak/
+venv.bak/
 .env
+.env.*
 
 # -- Sample media / test data (large binaries) --
 *.mkv
+*.MKV
 *.mp4
+*.MP4
 *.avi
+*.AVI
 *.mov
+*.MOV
 *.wav
+*.WAV
 *.mp3
+*.MP3
 
 # -- Subtitle artifacts --
 *.srt
 *.corrected.srt
 *.vtt
+
+# -- IDE & Editor --
+.vscode/
+.idea/
+*.swp
+*.swo
 
 # -- OS --
 Thumbs.db

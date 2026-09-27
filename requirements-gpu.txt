@@ -1,0 +1,10 @@
+# Optional NVIDIA GPU acceleration, on top of requirements.txt.
+#
+# These wheels are roughly 2 GB, which is why they are not in the default
+# install. The app's "Enable GPU acceleration" button installs this file for you.
+# Only NVIDIA GPUs are supported; AMD and Intel GPUs will use the CPU.
+-r requirements.txt
+
+nvidia-cublas-cu12
+nvidia-cudnn-cu12
+nvidia-cuda-runtime-cu12
